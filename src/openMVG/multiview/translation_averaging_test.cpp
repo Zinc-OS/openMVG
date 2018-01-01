@@ -7,6 +7,7 @@
 #include "openMVG/multiview/translation_averaging_common.hpp"
 #include "openMVG/multiview/translation_averaging_solver.hpp"
 #include "openMVG/multiview/translation_averaging_test.hpp"
+
 #include "testing/testing.h"
 
 #include <fstream>
@@ -27,7 +28,7 @@ TEST(translation_averaging, globalTi_from_tijs_Triplets_softL1_Ceres) {
 
   const bool bCardiod = true;
   const bool bRelative_Translation_PerTriplet = true;
-  std::vector<openMVG::relativeInfo > vec_relative_estimates;
+  std::vector<RelativeInfo_Vec > vec_relative_estimates;
 
   const NViewDataSet d =
     Setup_RelativeTranslations_AndNviewDataset
@@ -43,7 +44,7 @@ TEST(translation_averaging, globalTi_from_tijs_Triplets_softL1_Ceres) {
   // Solve the translation averaging problem:
   std::vector<Vec3> vec_translations;
   EXPECT_TRUE(solve_translations_problem_softl1(
-    vec_relative_estimates, bRelative_Translation_PerTriplet, iNviews, vec_translations));
+    vec_relative_estimates, vec_translations));
 
   EXPECT_EQ(iNviews, vec_translations.size());
 
@@ -76,7 +77,7 @@ TEST(translation_averaging, globalTi_from_tijs_softl1_Ceres) {
 
   const bool bCardiod = true;
   const bool bRelative_Translation_PerTriplet = false;
-  std::vector<openMVG::relativeInfo > vec_relative_estimates;
+  std::vector<RelativeInfo_Vec > vec_relative_estimates;
 
   const NViewDataSet d =
     Setup_RelativeTranslations_AndNviewDataset
@@ -92,7 +93,7 @@ TEST(translation_averaging, globalTi_from_tijs_softl1_Ceres) {
   // Solve the translation averaging problem:
   std::vector<Vec3> vec_translations;
   EXPECT_TRUE(solve_translations_problem_softl1(
-    vec_relative_estimates, bRelative_Translation_PerTriplet, iNviews, vec_translations));
+    vec_relative_estimates, vec_translations));
 
   EXPECT_EQ(iNviews, vec_translations.size());
 
@@ -115,7 +116,7 @@ TEST(translation_averaging, globalTi_from_tijs_softl1_Ceres) {
   }
 }
 
-TEST(translation_averaging, globalTi_from_tijs_Triplets_l2_chordal) {
+TEST(translation_averaging, globalTi_from_tijs_l2_chordal) {
 
   const int focal = 1000;
   const int principal_Point = 500;
@@ -124,8 +125,8 @@ TEST(translation_averaging, globalTi_from_tijs_Triplets_l2_chordal) {
   const int iNbPoints = 6;
 
   const bool bCardiod = true;
-  const bool bRelative_Translation_PerTriplet = true;
-  std::vector<openMVG::relativeInfo > vec_relative_estimates;
+  const bool bRelative_Translation_PerTriplet = false;
+  std::vector<openMVG::RelativeInfo_Vec > vec_relative_estimates;
 
   const NViewDataSet d =
     Setup_RelativeTranslations_AndNviewDataset
@@ -147,22 +148,25 @@ TEST(translation_averaging, globalTi_from_tijs_Triplets_l2_chordal) {
   std::vector<double> vec_weights;
   vec_weights.reserve(vec_relative_estimates.size());
 
-  for(int i=0; i < vec_relative_estimates.size(); ++i)
+  for (const openMVG::RelativeInfo_Vec & iter : vec_relative_estimates)
   {
-    const openMVG::relativeInfo & rel = vec_relative_estimates[i];
-    vec_edges.push_back(rel.first.first);
-    vec_edges.push_back(rel.first.second);
+    for (const relativeInfo & rel : iter)
+    {
+      vec_edges.push_back(rel.first.first);
+      vec_edges.push_back(rel.first.second);
 
-    const Vec3 EdgeDirection = -(d._R[rel.first.second].transpose() * rel.second.second.normalized());
+      const Vec3 EdgeDirection = -(d._R[rel.first.second].transpose() * rel.second.second.normalized());
+      vec_poses.push_back(EdgeDirection(0));
+      vec_poses.push_back(EdgeDirection(1));
+      vec_poses.push_back(EdgeDirection(2));
 
-    vec_poses.push_back(EdgeDirection(0));
-    vec_poses.push_back(EdgeDirection(1));
-    vec_poses.push_back(EdgeDirection(2));
-
-    vec_weights.push_back(1.0);
+      vec_weights.push_back(1.0);
+    }
   }
 
-  const double function_tolerance=1e-7, parameter_tolerance=1e-8;
+  const double
+    function_tolerance = 1e-7,
+    parameter_tolerance=1e-8;
   const int max_iterations = 500;
 
   const double loss_width = 0.0;

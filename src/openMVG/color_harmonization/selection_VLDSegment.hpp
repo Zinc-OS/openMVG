@@ -5,8 +5,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_COLORHARMONIZATION_VLDSEGMENT_H
-#define OPENMVG_COLORHARMONIZATION_VLDSEGMENT_H
+#ifndef OPENMVG_COLOR_HARMONIZATION_SELECTION_VLDSEGMENT_HPP
+#define OPENMVG_COLOR_HARMONIZATION_SELECTION_VLDSEGMENT_HPP
 
 #include "openMVG/color_harmonization/selection_interface.hpp"
 #include "openMVG/matching/kvld/kvld.h"
@@ -24,12 +24,11 @@ class commonDataByPair_VLDSegment  : public commonDataByPair
                                const vector< features::SIOPointFeature >& vec_featsL,
                                const vector< features::SIOPointFeature >& vec_featsR):
            commonDataByPair( sLeftImage, sRightImage ),
-           _vec_PutativeMatches( vec_PutativeMatches ),
-           _vec_featsL( vec_featsL ), _vec_featsR( vec_featsR )
+           _vec_featsL( vec_featsL ), _vec_featsR( vec_featsR ),
+           _vec_PutativeMatches( vec_PutativeMatches )
   {}
 
-  virtual ~commonDataByPair_VLDSegment()
-  {}
+  ~commonDataByPair_VLDSegment() override = default ;
 
   /**
    * Put masks to white, images are conserved
@@ -39,9 +38,9 @@ class commonDataByPair_VLDSegment  : public commonDataByPair
    *
    * \return True.
    */
-  virtual bool computeMask(
+  bool computeMask(
     image::Image< unsigned char > & maskLeft,
-    image::Image< unsigned char > & maskRight )
+    image::Image< unsigned char > & maskRight ) override
   {
     std::vector< matching::IndMatch > vec_KVLDMatches;
 
@@ -58,7 +57,7 @@ class commonDataByPair_VLDSegment  : public commonDataByPair
           iter_match != _vec_PutativeMatches.end();
           ++iter_match )
     {
-      matchesPair.push_back( std::make_pair( iter_match->_i, iter_match->_j ) );
+      matchesPair.push_back( std::make_pair( iter_match->i_, iter_match->j_ ) );
     }
 
     std::vector< double > vec_score;
@@ -116,4 +115,4 @@ private:
 }  // namespace color_harmonization
 }  // namespace openMVG
 
-#endif  // OPENMVG_COLORHARMONIZATION_VLDSEGMENT_H
+#endif  // OPENMVG_COLOR_HARMONIZATION_SELECTION_VLDSEGMENT_HPP

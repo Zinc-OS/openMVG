@@ -12,6 +12,7 @@
 
 #include "openMVG/sfm/pipelines/global/GlobalSfM_rotation_averaging.hpp"
 #include "openMVG/sfm/pipelines/global/GlobalSfM_translation_averaging.hpp"
+
 #include "third_party/htmlDoc/htmlDoc.hpp"
 
 namespace openMVG{
@@ -34,7 +35,7 @@ public:
   void SetMatchesProvider(Matches_Provider * provider);
 
   void SetRotationAveragingMethod(ERotationAveragingMethod eRotationAveragingMethod);
-  void SetTranslationAveragingMethod(ETranslationAveragingMethod _eTranslationAveragingMethod);
+  void SetTranslationAveragingMethod(ETranslationAveragingMethod eTranslation_averaging_method_);
 
   virtual bool Process();
 
@@ -74,18 +75,16 @@ private:
   //----
 
   // HTML logger
-  std::shared_ptr<htmlDocument::htmlDocumentStream> _htmlDocStream;
-  std::string _sLoggingFile;
+  std::shared_ptr<htmlDocument::htmlDocumentStream> html_doc_stream_;
+  std::string sLogging_file_;
 
   // Parameter
-  ERotationAveragingMethod _eRotationAveragingMethod;
-  ETranslationAveragingMethod _eTranslationAveragingMethod;
+  ERotationAveragingMethod eRotation_averaging_method_;
+  ETranslationAveragingMethod eTranslation_averaging_method_;
 
   //-- Data provider
-  Features_Provider  * _features_provider;
-  Matches_Provider  * _matches_provider;
-
-  std::shared_ptr<Features_Provider> _normalized_features_provider;
+  Features_Provider  * features_provider_;
+  Matches_Provider  * matches_provider_;
 };
 
 } // namespace sfm

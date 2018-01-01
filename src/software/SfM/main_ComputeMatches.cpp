@@ -1,5 +1,5 @@
 
-// Copyright (c) 2012, 2013 Pierre MOULON.
+// Copyright (c) 2012, 2016 Pierre MOULON.
 
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include "openMVG/sfm/pipelines/sfm_engine.hpp"
 #include "openMVG/sfm/pipelines/sfm_features_provider.hpp"
 #include "openMVG/sfm/pipelines/sfm_regions_provider.hpp"
+#include "openMVG/sfm/pipelines/sfm_regions_provider_cache.hpp"
 
 /// Generic Image Collection image matching
 #include "openMVG/matching_image_collection/Matcher_Regions_AllInMemory.hpp"
@@ -18,6 +19,7 @@
 #include "openMVG/matching_image_collection/F_ACRobust.hpp"
 #include "openMVG/matching_image_collection/E_ACRobust.hpp"
 #include "openMVG/matching_image_collection/H_ACRobust.hpp"
+#include "openMVG/matching_image_collection/Pair_Builder.hpp"
 #include "openMVG/matching/pairwiseAdjacencyDisplay.hpp"
 #include "openMVG/matching/indMatch_utils.hpp"
 #include "openMVG/system/timer.hpp"
@@ -67,11 +69,11 @@ int main(int argc, char **argv)
   float fDistRatio = 0.8f;
   int iMatchingVideoMode = -1;
   std::string sPredefinedPairList = "";
-  bool bUpRight = false;
   std::string sNearestMatchingMethod = "AUTO";
   bool bForce = false;
   bool bGuided_matching = false;
   int imax_iteration = 2048;
+  unsigned int ui_max_cache_size = 0;
 
   //required
   cmd.add( make_option('i', sSfM_Data_Filename, "input_file") );
@@ -85,6 +87,8 @@ int main(int argc, char **argv)
   cmd.add( make_option('f', bForce, "force") );
   cmd.add( make_option('m', bGuided_matching, "guided_matching") );
   cmd.add( make_option('I', imax_iteration, "max_iteration") );
+  cmd.add( make_option('c', ui_max_cache_size, "cache_size") );
+
 
   try {
       if (argc == 1) throw std::string("Invalid command line parameter.");
@@ -121,6 +125,9 @@ int main(int argc, char **argv)
       << "    BRUTEFORCEHAMMING: BruteForce Hamming matching.\n"
       << "[-m|--guided_matching]\n"
       << "  use the found model to improve the pairwise correspondences."
+      << "[-c|--cache_size]\n"
+      << "  Use a regions cache (only cache_size regions will be stored in memory)"
+      << "  If not used, all regions will be load in memory."
       << std::endl;
 
       std::cerr << s << std::endl;
@@ -138,7 +145,8 @@ int main(int argc, char **argv)
             << "--video_mode_matching " << iMatchingVideoMode << "\n"
             << "--pair_list " << sPredefinedPairList << "\n"
             << "--nearest_matching_method " << sNearestMatchingMethod << "\n"
-            << "--guided_matching " << bGuided_matching << std::endl;
+            << "--guided_matching " << bGuided_matching << "\n"
+            << "--cache_size " << ((ui_max_cache_size == 0) ? "unlimited" : std::to_string(ui_max_cache_size)) << std::endl;
 
   EPairMode ePairmode = (iMatchingVideoMode == -1 ) ? PAIR_EXHAUSTIVE : PAIR_CONTIGUOUS;
 
@@ -161,15 +169,15 @@ int main(int argc, char **argv)
   {
     case 'f': case 'F':
       eGeometricModelToCompute = FUNDAMENTAL_MATRIX;
-      sGeometricMatchesFilename = "matches.f.txt";
+      sGeometricMatchesFilename = "matches.f.bin";
     break;
     case 'e': case 'E':
       eGeometricModelToCompute = ESSENTIAL_MATRIX;
-      sGeometricMatchesFilename = "matches.e.txt";
+      sGeometricMatchesFilename = "matches.e.bin";
     break;
     case 'h': case 'H':
       eGeometricModelToCompute = HOMOGRAPHY_MATRIX;
-      sGeometricMatchesFilename = "matches.h.txt";
+      sGeometricMatchesFilename = "matches.h.bin";
     break;
     default:
       std::cerr << "Unknown geometric model" << std::endl;
@@ -214,7 +222,18 @@ int main(int argc, char **argv)
   //---------------------------------------
 
   // Load the corresponding view regions
-  std::shared_ptr<Regions_Provider> regions_provider = std::make_shared<Regions_Provider>();
+  std::shared_ptr<Regions_Provider> regions_provider;
+  if (ui_max_cache_size == 0)
+  {
+    // Default regions provider (load & store all regions in memory)
+    regions_provider = std::make_shared<Regions_Provider>();
+  }
+  else
+  {
+    // Cached regions provider (load & store regions on demand)
+    regions_provider = std::make_shared<Regions_Provider_Cache>(ui_max_cache_size);
+  }
+
   if (!regions_provider->load(sfm_data, sMatchesDirectory, regions_type)) {
     std::cerr << std::endl << "Invalid regions." << std::endl;
     return EXIT_FAILURE;
@@ -242,10 +261,21 @@ int main(int argc, char **argv)
 
   std::cout << std::endl << " - PUTATIVE MATCHES - " << std::endl;
   // If the matches already exists, reload them
-  if (!bForce && stlplus::file_exists(sMatchesDirectory + "/matches.putative.txt"))
+  if
+  (
+    !bForce
+    && (stlplus::file_exists(sMatchesDirectory + "/matches.putative.txt")
+        || stlplus::file_exists(sMatchesDirectory + "/matches.putative.bin"))
+  )
   {
-    PairedIndMatchImport(sMatchesDirectory + "/matches.putative.txt", map_PutativesMatches);
-    std::cout << "\t PREVIOUS RESULTS LOADED" << std::endl;
+    if (!(Load(map_PutativesMatches, sMatchesDirectory + "/matches.putative.bin") ||
+          Load(map_PutativesMatches, sMatchesDirectory + "/matches.putative.txt")) )
+    {
+      std::cerr << "Cannot load input matches file";
+      return EXIT_FAILURE;
+    }
+    std::cout << "\t PREVIOUS RESULTS LOADED;"
+      << " #pair: " << map_PutativesMatches.size() << std::endl;
   }
   else // Compute the putative matches
   {
@@ -321,7 +351,7 @@ int main(int argc, char **argv)
           if(!loadPairs(sfm_data.GetViews().size(), sPredefinedPairList, pairs))
           {
               return EXIT_FAILURE;
-          };
+          }
           break;
       }
       // Photometric matching of putative pairs
@@ -329,10 +359,13 @@ int main(int argc, char **argv)
       //---------------------------------------
       //-- Export putative matches
       //---------------------------------------
-      std::ofstream file (std::string(sMatchesDirectory + "/matches.putative.txt").c_str());
-      if (file.is_open())
-        PairedIndMatchToStream(map_PutativesMatches, file);
-      file.close();
+      if (!Save(map_PutativesMatches, std::string(sMatchesDirectory + "/matches.putative.bin")))
+      {
+        std::cerr
+          << "Cannot save computed matches in: "
+          << std::string(sMatchesDirectory + "/matches.putative.bin");
+        return EXIT_FAILURE;
+      }
     }
     std::cout << "Task (Regions Matching) done in (s): " << timer.elapsed() << std::endl;
   }
@@ -348,7 +381,7 @@ int main(int argc, char **argv)
     graph::indexedGraph putativeGraph(set_ViewIds, getPairs(map_PutativesMatches));
     graph::exportToGraphvizData(
       stlplus::create_filespec(sMatchesDirectory, "putative_matches"),
-      putativeGraph.g);
+      putativeGraph);
   }
 
   //---------------------------------------
@@ -416,10 +449,14 @@ int main(int argc, char **argv)
     //---------------------------------------
     //-- Export geometric filtered matches
     //---------------------------------------
-    std::ofstream file (string(sMatchesDirectory + "/" + sGeometricMatchesFilename).c_str());
-    if (file.is_open())
-      PairedIndMatchToStream(map_GeometricMatches, file);
-    file.close();
+    if (!Save(map_GeometricMatches,
+      std::string(sMatchesDirectory + "/" + sGeometricMatchesFilename)))
+    {
+      std::cerr
+          << "Cannot save computed matches in: "
+          << std::string(sMatchesDirectory + "/" + sGeometricMatchesFilename);
+      return EXIT_FAILURE;
+    }
 
     std::cout << "Task done in (s): " << timer.elapsed() << std::endl;
 
@@ -438,7 +475,7 @@ int main(int argc, char **argv)
       graph::indexedGraph putativeGraph(set_ViewIds, getPairs(map_GeometricMatches));
       graph::exportToGraphvizData(
         stlplus::create_filespec(sMatchesDirectory, "geometric_matches"),
-        putativeGraph.g);
+        putativeGraph);
     }
   }
   return EXIT_SUCCESS;

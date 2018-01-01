@@ -5,11 +5,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_MULTIVIEW_ROTATION_AVERAGING_L2_H_
-#define OPENMVG_MULTIVIEW_ROTATION_AVERAGING_L2_H_
+#ifndef OPENMVG_MULTIVIEW_ROTATION_AVERAGING_L2_HPP
+#define OPENMVG_MULTIVIEW_ROTATION_AVERAGING_L2_HPP
 
 #include "openMVG/multiview/rotation_averaging_common.hpp"
-#include <vector>
 
 #ifdef _MSC_VER
 #pragma warning( once : 4267 ) //warning C4267: 'argument' : conversion from 'size_t' to 'const int', possible loss of data
@@ -70,5 +69,5 @@ bool L2RotationAveraging_Refine(
 } // namespace rotation_averaging
 } // namespace openMVG
 
-#endif //OPENMVG_MULTIVIEW_ROTATION_AVERAGING_L2_H_
+#endif //OPENMVG_MULTIVIEW_ROTATION_AVERAGING_L2_HPP
 

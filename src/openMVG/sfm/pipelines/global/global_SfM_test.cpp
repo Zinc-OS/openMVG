@@ -9,7 +9,7 @@
 // Test summary:
 //-----------------
 // - Create features points and matching from the synthetic dataset
-// - Init a SfM_Data scene VIew and Intrinsic from a synthetic dataset
+// - Init a SfM_Data scene View and Intrinsic from a synthetic dataset
 // - Perform Global SfM on the data
 // - Assert that:
 //   - mean residual error is below the gaussian noise added to observation
@@ -19,16 +19,18 @@
 
 #include "openMVG/sfm/pipelines/pipelines_test.hpp"
 #include "openMVG/sfm/sfm.hpp"
-using namespace openMVG;
-using namespace openMVG::cameras;
-using namespace openMVG::geometry;
-using namespace openMVG::sfm;
 
 #include "testing/testing.h"
 
 #include <cmath>
 #include <cstdio>
 #include <iostream>
+
+using namespace openMVG;
+using namespace openMVG::cameras;
+using namespace openMVG::geometry;
+using namespace openMVG::sfm;
+
 
 TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingL1) {
 
@@ -65,10 +67,10 @@ TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingL1) {
   sfmEngine.SetFeaturesProvider(feats_provider.get());
   sfmEngine.SetMatchesProvider(matches_provider.get());
 
-  // Configure reconstruction parameters
-  sfmEngine.Set_bFixedIntrinsics(true);
+  // Configure reconstruction parameters (intrinsic parameters are held constant)
+  sfmEngine.Set_Intrinsics_Refinement_Type(cameras::Intrinsic_Parameter_Type::NONE);
 
-  // Configure motion averaging method
+  // Configure motion averaging methods
   sfmEngine.SetRotationAveragingMethod(ROTATION_AVERAGING_L2);
   sfmEngine.SetTranslationAveragingMethod(TRANSLATION_AVERAGING_L1);
 
@@ -77,8 +79,9 @@ TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingL1) {
   const double dResidual = RMSE(sfmEngine.Get_SfM_Data());
   std::cout << "RMSE residual: " << dResidual << std::endl;
   EXPECT_TRUE( dResidual < 0.5);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetPoses().size() == nviews);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetLandmarks().size() == npoints);
+  EXPECT_EQ( nviews, sfmEngine.Get_SfM_Data().GetPoses().size());
+  EXPECT_EQ( npoints, sfmEngine.Get_SfM_Data().GetLandmarks().size());
+  EXPECT_TRUE( IsTracksOneCC(sfmEngine.Get_SfM_Data()));
 }
 
 TEST(GLOBAL_SFM, RotationAveragingL1_TranslationAveragingL1) {
@@ -116,10 +119,10 @@ TEST(GLOBAL_SFM, RotationAveragingL1_TranslationAveragingL1) {
   sfmEngine.SetFeaturesProvider(feats_provider.get());
   sfmEngine.SetMatchesProvider(matches_provider.get());
 
-  // Configure reconstruction parameters
-  sfmEngine.Set_bFixedIntrinsics(true);
+  // Configure reconstruction parameters (intrinsic parameters are held constant)
+  sfmEngine.Set_Intrinsics_Refinement_Type(cameras::Intrinsic_Parameter_Type::NONE);
 
-  // Configure motion averaging method
+  // Configure motion averaging methods
   sfmEngine.SetRotationAveragingMethod(ROTATION_AVERAGING_L1);
   sfmEngine.SetTranslationAveragingMethod(TRANSLATION_AVERAGING_L1);
 
@@ -128,9 +131,11 @@ TEST(GLOBAL_SFM, RotationAveragingL1_TranslationAveragingL1) {
   const double dResidual = RMSE(sfmEngine.Get_SfM_Data());
   std::cout << "RMSE residual: " << dResidual << std::endl;
   EXPECT_TRUE( dResidual < 0.5);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetPoses().size() == nviews);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetLandmarks().size() == npoints);
+  EXPECT_EQ( nviews, sfmEngine.Get_SfM_Data().GetPoses().size());
+  EXPECT_EQ( npoints, sfmEngine.Get_SfM_Data().GetLandmarks().size());
+  EXPECT_TRUE( IsTracksOneCC(sfmEngine.Get_SfM_Data()));
 }
+
 
 TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingL2_Chordal) {
 
@@ -167,8 +172,8 @@ TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingL2_Chordal) {
   sfmEngine.SetFeaturesProvider(feats_provider.get());
   sfmEngine.SetMatchesProvider(matches_provider.get());
 
-  // Configure reconstruction parameters
-  sfmEngine.Set_bFixedIntrinsics(true);
+  // Configure reconstruction parameters (intrinsic parameters are held constant)
+  sfmEngine.Set_Intrinsics_Refinement_Type(cameras::Intrinsic_Parameter_Type::NONE);
 
   // Configure motion averaging method
   sfmEngine.SetRotationAveragingMethod(ROTATION_AVERAGING_L2);
@@ -179,8 +184,9 @@ TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingL2_Chordal) {
   const double dResidual = RMSE(sfmEngine.Get_SfM_Data());
   std::cout << "RMSE residual: " << dResidual << std::endl;
   EXPECT_TRUE( dResidual < 0.5);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetPoses().size() == nviews);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetLandmarks().size() == npoints);
+  EXPECT_EQ( nviews, sfmEngine.Get_SfM_Data().GetPoses().size());
+  EXPECT_EQ( npoints, sfmEngine.Get_SfM_Data().GetLandmarks().size());
+  EXPECT_TRUE( IsTracksOneCC(sfmEngine.Get_SfM_Data()));
 }
 
 TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingSoftL1) {
@@ -218,10 +224,10 @@ TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingSoftL1) {
   sfmEngine.SetFeaturesProvider(feats_provider.get());
   sfmEngine.SetMatchesProvider(matches_provider.get());
 
-  // Configure reconstruction parameters
-  sfmEngine.Set_bFixedIntrinsics(true);
+  // Configure reconstruction parameters (intrinsic parameters are held constant)
+  sfmEngine.Set_Intrinsics_Refinement_Type(cameras::Intrinsic_Parameter_Type::NONE);
 
-  // Configure motion averaging method
+  // Configure motion averaging methods
   sfmEngine.SetRotationAveragingMethod(ROTATION_AVERAGING_L2);
   sfmEngine.SetTranslationAveragingMethod(TRANSLATION_AVERAGING_SOFTL1);
 
@@ -230,8 +236,9 @@ TEST(GLOBAL_SFM, RotationAveragingL2_TranslationAveragingSoftL1) {
   const double dResidual = RMSE(sfmEngine.Get_SfM_Data());
   std::cout << "RMSE residual: " << dResidual << std::endl;
   EXPECT_TRUE( dResidual < 0.5);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetPoses().size() == nviews);
-  EXPECT_TRUE( sfmEngine.Get_SfM_Data().GetLandmarks().size() == npoints);
+  EXPECT_EQ( nviews, sfmEngine.Get_SfM_Data().GetPoses().size());
+  EXPECT_EQ( npoints, sfmEngine.Get_SfM_Data().GetLandmarks().size());
+  EXPECT_TRUE( IsTracksOneCC(sfmEngine.Get_SfM_Data()));
 }
 
 /* ************************************************************************* */

@@ -4,12 +4,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_PATENTED_SIFT_SIFT_DESCRIBER_H
-#define OPENMVG_PATENTED_SIFT_SIFT_DESCRIBER_H
+#ifndef OPENMVG_PATENTED_SIFT_SIFT_DESCRIBER_HPP
+#define OPENMVG_PATENTED_SIFT_SIFT_DESCRIBER_HPP
 
 #include <cereal/cereal.hpp>
+
+#include <algorithm>
 #include <iostream>
 #include <numeric>
+
 
 extern "C" {
 #include "nonFree/sift/vl/sift.h"
@@ -29,7 +32,7 @@ inline void siftDescToUChar(
 {
   if (brootSift)  {
     // rootsift = sqrt( sift / sum(sift) );
-    const float sum = accumulate(descr, descr+128, 0.0f);
+    const float sum = std::accumulate(descr, descr+128, 0.0f);
     for (int k=0;k<128;++k)
       descriptor[k] = static_cast<unsigned char>(512.f*sqrt(descr[k]/sum));
   }
@@ -38,53 +41,66 @@ inline void siftDescToUChar(
     descriptor[k] = static_cast<unsigned char>(512.f*descr[k]);
 }
 
-struct SiftParams
-{
-  SiftParams(
-    int first_octave = 0,
-    int num_octaves = 6,
-    int num_scales = 3,
-    float edge_threshold = 10.0f,
-    float peak_threshold = 0.04f,
-    bool root_sift = true
-  ):
-    _first_octave(first_octave),
-    _num_octaves(num_octaves),
-    _num_scales(num_scales),
-    _edge_threshold(edge_threshold),
-    _peak_threshold(peak_threshold),
-    _root_sift(root_sift) {}
-
-  template<class Archive>
-  void serialize( Archive & ar )
-  {
-    ar(
-      cereal::make_nvp("first_octave", _first_octave),
-      cereal::make_nvp("num_octaves",_num_octaves),
-      cereal::make_nvp("num_scales",_num_scales),
-      cereal::make_nvp("edge_threshold",_edge_threshold),
-      cereal::make_nvp("peak_threshold",_peak_threshold),
-      cereal::make_nvp("root_sift",_root_sift));
-  }
-
-  // Parameters
-  int _first_octave;      // Use original image, or perform an upscale if == -1
-  int _num_octaves;       // Max octaves count
-  int _num_scales;        // Scales per octave
-  float _edge_threshold;  // Max ratio of Hessian eigenvalues
-  float _peak_threshold;  // Min contrast
-  bool _root_sift;        // see [1]
-};
-
 class SIFT_Image_describer : public Image_describer
 {
 public:
-  SIFT_Image_describer(const SiftParams & params = SiftParams(), bool bOrientation = true)
-    :Image_describer(), _params(params), _bOrientation(bOrientation) {}
 
-  ~SIFT_Image_describer() {}
+  struct Params
+  {
+    Params(
+      int first_octave = 0,
+      int num_octaves = 6,
+      int num_scales = 3,
+      float edge_threshold = 10.0f,
+      float peak_threshold = 0.04f,
+      bool root_sift = true
+    ):
+      _first_octave(first_octave),
+      _num_octaves(num_octaves),
+      _num_scales(num_scales),
+      _edge_threshold(edge_threshold),
+      _peak_threshold(peak_threshold),
+      _root_sift(root_sift) {}
 
-  bool Set_configuration_preset(EDESCRIBER_PRESET preset)
+    template<class Archive>
+    void serialize( Archive & ar )
+    {
+      ar(
+        cereal::make_nvp("first_octave", _first_octave),
+        cereal::make_nvp("num_octaves",_num_octaves),
+        cereal::make_nvp("num_scales",_num_scales),
+        cereal::make_nvp("edge_threshold",_edge_threshold),
+        cereal::make_nvp("peak_threshold",_peak_threshold),
+        cereal::make_nvp("root_sift",_root_sift));
+    }
+
+    // Parameters
+    int _first_octave;      // Use original image, or perform an upscale if == -1
+    int _num_octaves;       // Max octaves count
+    int _num_scales;        // Scales per octave
+    float _edge_threshold;  // Max ratio of Hessian eigenvalues
+    float _peak_threshold;  // Min contrast
+    bool _root_sift;        // see [1]
+  };
+
+  //--
+  // Constructor
+  //--
+  SIFT_Image_describer
+  (
+    const Params params = Params(),
+    bool bOrientation = true
+  ):Image_describer(), _params(params), _bOrientation(bOrientation)
+  {
+    vl_constructor();
+  }
+
+  ~SIFT_Image_describer()
+  {
+    vl_destructor();
+  }
+
+  bool Set_configuration_preset(EDESCRIBER_PRESET preset) override
   {
     switch(preset)
     {
@@ -111,16 +127,16 @@ public:
   @param mask 8-bit gray image for keypoint filtering (optional).
      Non-zero values depict the region of interest.
   */
-  bool Describe(const image::Image<unsigned char>& image,
+  bool Describe
+  (
+    const image::Image<unsigned char>& image,
     std::unique_ptr<Regions> &regions,
-    const image::Image<unsigned char> * mask = NULL)
+    const image::Image<unsigned char> * mask = nullptr
+  ) override
   {
     const int w = image.Width(), h = image.Height();
     //Convert to float
     const image::Image<float> If(image.GetMat().cast<float>());
-
-    // Configure VLFeat
-    vl_constructor();
 
     VlSiftFilt *filt = vl_sift_new(w, h,
       _params._num_octaves, _params._num_scales, _params._first_octave);
@@ -161,7 +177,7 @@ public:
         if (mask)
         {
           const image::Image<unsigned char> & maskIma = *mask;
-          if (maskIma(keys[i].y, keys[i].x) > 0)
+          if (maskIma(keys[i].y, keys[i].x) == 0)
             continue;
         }
 
@@ -192,13 +208,11 @@ public:
     }
     vl_sift_delete(filt);
 
-    vl_destructor();
-
     return true;
   };
 
   /// Allocate Regions type depending of the Image_describer
-  void Allocate(std::unique_ptr<Regions> &regions) const
+  void Allocate(std::unique_ptr<Regions> &regions) const override
   {
     regions.reset( new SIFT_Regions );
   }
@@ -212,7 +226,7 @@ public:
   }
 
 private:
-  SiftParams _params;
+  Params _params;
   bool _bOrientation;
 };
 
@@ -222,5 +236,6 @@ private:
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/json.hpp>
 CEREAL_REGISTER_TYPE_WITH_NAME(openMVG::features::SIFT_Image_describer, "SIFT_Image_describer");
+CEREAL_REGISTER_POLYMORPHIC_RELATION(openMVG::features::Image_describer, openMVG::features::SIFT_Image_describer)
 
-#endif // OPENMVG_PATENTED_SIFT_SIFT_DESCRIBER_H
+#endif // OPENMVG_PATENTED_SIFT_SIFT_DESCRIBER_HPP

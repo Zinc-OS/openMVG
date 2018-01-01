@@ -94,8 +94,7 @@ int main(int argc, char ** argv)
   // Read the matches
   std::shared_ptr<Matches_Provider> matches_provider = std::make_shared<Matches_Provider>();
   if (!matches_provider->load(sfm_data, sMatchFile)) {
-    std::cerr << std::endl
-      << "Invalid matches file." << std::endl;
+    std::cerr << "\nInvalid matches file." << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -104,7 +103,7 @@ int main(int argc, char ** argv)
   //---------------------------------------
   tracks::STLMAPTracks map_tracks;
   {
-    const openMVG::matching::PairWiseMatches & map_Matches = matches_provider->_pairWise_matches;
+    const openMVG::matching::PairWiseMatches & map_Matches = matches_provider->pairWise_matches_;
     tracks::TracksBuilder tracksBuilder;
     tracksBuilder.Build(map_Matches);
     tracksBuilder.Filter();
@@ -139,9 +138,7 @@ int main(int argc, char ** argv)
 
       //Get common tracks between view I and J
       tracks::STLMAPTracks map_tracksCommon;
-      std::set<size_t> set_imageIndex;
-      set_imageIndex.insert(I);
-      set_imageIndex.insert(J);
+      const std::set<size_t> set_imageIndex = {I,J};
       TracksUtilsMap::GetTracksInImages(set_imageIndex, map_tracks, map_tracksCommon);
 
       if (!map_tracksCommon.empty())

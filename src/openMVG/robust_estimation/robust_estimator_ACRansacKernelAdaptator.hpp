@@ -5,8 +5,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_ROBUST_ESTIMATOR_ACRANSAC_KERNEL_ADAPTATOR_H_
-#define OPENMVG_ROBUST_ESTIMATOR_ACRANSAC_KERNEL_ADAPTATOR_H_
+#ifndef OPENMVG_ROBUST_ESTIMATOR_ACRANSAC_KERNEL_ADAPTATOR_HPP
+#define OPENMVG_ROBUST_ESTIMATOR_ACRANSAC_KERNEL_ADAPTATOR_HPP
 
 // Here a collection of A contrario Kernel adaptor.
 //  - See // [1] "Robust and accurate calibration of camera networks". PhD.
@@ -27,6 +27,9 @@
 //  by the generic ACRANSAC routine.
 //
 
+#include "openMVG/numeric/numeric.h"
+#include "openMVG/multiview/conditioning.hpp"
+
 namespace openMVG {
 namespace robust{
 
@@ -42,9 +45,9 @@ template <typename SolverArg,
 class ACKernelAdaptor
 {
 public:
-  typedef SolverArg Solver;
-  typedef ModelArg  Model;
-  typedef ErrorArg ErrorT;
+  using Solver = SolverArg;
+  using Model = ModelArg;
+  using ErrorT = ErrorArg;
 
   ACKernelAdaptor(
     const Mat &x1, int w1, int h1,
@@ -130,9 +133,9 @@ template <typename SolverArg,
 class ACKernelAdaptorResection
 {
 public:
-  typedef SolverArg Solver;
-  typedef ModelArg  Model;
-  typedef ErrorArg ErrorT;
+  using Solver = SolverArg;
+  using Model = ModelArg;
+  using ErrorT = ErrorArg;
 
   ACKernelAdaptorResection(const Mat &x2d, int w, int h, const Mat &x3D)
     : x2d_(x2d.rows(), x2d.cols()), x3D_(x3D),
@@ -189,14 +192,13 @@ private:
 ///  known Intrinsic
 template <typename SolverArg,
   typename ErrorArg,
-  typename UnnormalizerArg,
   typename ModelArg = Mat34>
 class ACKernelAdaptorResection_K
 {
 public:
-  typedef SolverArg Solver;
-  typedef ModelArg  Model;
-  typedef ErrorArg ErrorT;
+  using Solver = SolverArg;
+  using Model = ModelArg;
+  using ErrorT = ErrorArg;
 
   ACKernelAdaptorResection_K(const Mat &x2d, const Mat &x3D, const Mat3 & K)
     : x2d_(x2d.rows(), x2d.cols()), x3D_(x3D),
@@ -208,7 +210,7 @@ public:
     assert(x2d_.cols() == x3D_.cols());
 
     // Normalize points by inverse(K)
-    ApplyTransformationToPoints(x2d, N1_, &x2d_);
+    x2d_ = (N1_ * x2d.colwise().homogeneous()).colwise().hnormalized();
   }
 
   enum { MINIMUM_SAMPLES = Solver::MINIMUM_SAMPLES };
@@ -255,14 +257,13 @@ private:
 /// Essential matrix Kernel adaptor for the A contrario model estimator
 template <typename SolverArg,
   typename ErrorArg,
-  typename UnnormalizerArg,
   typename ModelArg = Mat3>
 class ACKernelAdaptorEssential
 {
 public:
-  typedef SolverArg Solver;
-  typedef ModelArg  Model;
-  typedef ErrorArg ErrorT;
+  using Solver = SolverArg;
+  using Model = ModelArg;
+  using ErrorT = ErrorArg;
 
   ACKernelAdaptorEssential(
     const Mat &x1, int w1, int h1,
@@ -276,12 +277,12 @@ public:
     assert(x1_.rows() == x2_.rows());
     assert(x1_.cols() == x2_.cols());
 
-    ApplyTransformationToPoints(x1_, K1_.inverse(), &x1k_);
-    ApplyTransformationToPoints(x2_, K2_.inverse(), &x2k_);
+    x1k_ = (K1_.inverse() * x1_.colwise().homogeneous()).colwise().hnormalized();
+    x2k_ = (K2_.inverse() * x2_.colwise().homogeneous()).colwise().hnormalized();
 
     //Point to line probability (line is the epipolar line)
-    double D = sqrt(w2*(double)w2 + h2*(double)h2); // diameter
-    double A = w2*(double)h2; // area
+    const double D = sqrt(w2*(double)w2 + h2*(double)h2); // diameter
+    const double A = w2*(double)h2; // area
     logalpha0_ = log10(2.0*D/A * .5);
   }
 
@@ -328,14 +329,13 @@ private:
 /// Specialization to handle radian angular residual error.
 template <typename SolverArg,
           typename ErrorArg,
-          typename UnnormalizerArg,
           typename ModelArg = Mat3>
 class ACKernelAdaptor_AngularRadianError
 {
 public:
-  typedef SolverArg Solver;
-  typedef ModelArg  Model;
-  typedef ErrorArg ErrorT;
+  using Solver = SolverArg;
+  using Model = ModelArg;
+  using ErrorT = ErrorArg;
 
   ACKernelAdaptor_AngularRadianError(
     const Mat & xA,
@@ -391,4 +391,5 @@ private:
 
 } // namespace robust
 } // namespace openMVG
-#endif // OPENMVG_ROBUST_ESTIMATOR_ACRANSAC_KERNEL_ADAPTATOR_H_
+
+#endif // OPENMVG_ROBUST_ESTIMATOR_ACRANSAC_KERNEL_ADAPTATOR_HPP

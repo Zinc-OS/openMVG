@@ -5,9 +5,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#pragma once
+#ifndef OPENMVG_MATCHING_IMAGE_COLLECTION_MATCHER_REGIONS_ALL_IN_MEMORY_HPP
+#define OPENMVG_MATCHING_IMAGE_COLLECTION_MATCHER_REGIONS_ALL_IN_MEMORY_HPP
 
 #include "openMVG/matching_image_collection/Matcher.hpp"
+#include "openMVG/matching/matcher_type.hpp"
 
 namespace openMVG {
 namespace matching_image_collection {
@@ -32,15 +34,17 @@ class Matcher_Regions_AllInMemory : public Matcher
     const sfm::SfM_Data & sfm_data,
     const std::shared_ptr<sfm::Regions_Provider> & regions_provider,
     const Pair_Set & pairs,
-    matching::PairWiseMatches & map_PutativesMatches // the pairwise photometric corresponding points
-  )const;
+    matching::PairWiseMatchesContainer & map_PutativesMatches // the pairwise photometric corresponding points
+  )const override ;
 
   private:
   // Distance ratio used to discard spurious correspondence
-  float _f_dist_ratio;
+  float f_dist_ratio_;
   // Matcher Type
-  matching::EMatcherType _eMatcherType;
+  matching::EMatcherType eMatcherType_;
 };
 
-} // namespace openMVG
 } // namespace matching_image_collection
+} // namespace openMVG
+
+#endif // OPENMVG_MATCHING_IMAGE_COLLECTION_MATCHER_REGIONS_ALL_IN_MEMORY_HPP

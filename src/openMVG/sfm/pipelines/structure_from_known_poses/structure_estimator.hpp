@@ -4,17 +4,26 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#pragma once
+#ifndef OPENMVG_SFM_PIPELINES_SFKP_STRUCTURE_ESTIMATOR_HPP
+#define OPENMVG_SFM_PIPELINES_SFKP_STRUCTURE_ESTIMATOR_HPP
 
-#include "openMVG/sfm/pipelines/sfm_regions_provider.hpp"
 #include "openMVG/matching/indMatch.hpp"
 
 namespace openMVG {
 namespace sfm {
 
+struct Regions_Provider;
+struct SfM_Data;
+
 class SfM_Data_Structure_Estimation_From_Known_Poses
 {
 public:
+
+  SfM_Data_Structure_Estimation_From_Known_Poses
+  (
+    double max_reprojection_error // pixels
+  );
+
 
   /// Use geometry of the views to compute a putative structure from features and descriptors.
   void run(
@@ -47,8 +56,10 @@ private:
   //--
   matching::PairWiseMatches putatives_matches;
   matching::PairWiseMatches triplets_matches;
+  double max_reprojection_error_;
 };
 
 } // namespace sfm
 } // namespace openMVG
 
+#endif // OPENMVG_SFM_PIPELINES_SFKP_STRUCTURE_ESTIMATOR_HPP

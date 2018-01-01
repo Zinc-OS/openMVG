@@ -4,15 +4,22 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_IMAGE_IMAGE_DIFFUSION_HPP_
-#define OPENMVG_IMAGE_IMAGE_DIFFUSION_HPP_
+#ifndef OPENMVG_IMAGE_IMAGE_DIFFUSION_HPP
+#define OPENMVG_IMAGE_IMAGE_DIFFUSION_HPP
 
 #ifdef _MSC_VER
-#pragma warning(once:4244)
+  #pragma warning(once:4244)
 #endif
 
-namespace openMVG {
-namespace image {
+#include "openMVG/numeric/numeric.h"
+
+#include <vector>
+#include <cmath>
+
+namespace openMVG
+{
+namespace image
+{
 
 /**
  ** Compute Perona and Malik G2 diffusion coefficient
@@ -28,12 +35,13 @@ void ImagePeronaMalikG2DiffusionCoef( const Image & Lx , const Image & Ly , cons
   const int width = Lx.Width();
   const int height = Lx.Height();
 
-  if( width != out.Width() || height != out.Height() )  {
+  if( width != out.Width() || height != out.Height() )
+  {
     out.resize( width , height ) ;
   }
 
-  typedef typename Image::Tpixel Real;
-  out.array() = ( static_cast<Real>(1.f) + (Lx.array().square()+Ly.array().square() )/(k*k) ).inverse();
+  using Real = typename Image::Tpixel;
+  out.array() = ( static_cast<Real>( 1.f ) + ( Lx.array().square() + Ly.array().square() ) / ( k * k ) ).inverse();
 }
 
 /**
@@ -49,7 +57,7 @@ template< typename Image >
 void ImageFEDCentral( const Image & src , const Image & diff , const typename Image::Tpixel half_t , Image & out ,
                       const int row_start , const int row_end )
 {
-  typedef typename Image::Tpixel Real ;
+  using Real = typename Image::Tpixel;
   const int width = src.Width() ;
   Real n_diff[4] ;
   Real n_src[4] ;
@@ -99,13 +107,14 @@ void ImageFEDCentralCPPThread( const Image & src , const Image & diff , const ty
 
   // Compute ranges
   std::vector< int > range;
-  SplitRange( 1 , (int) ( src.rows() - 1 ) , nb_thread , range ) ;
+  SplitRange( 1 , ( int ) ( src.rows() - 1 ) , nb_thread , range ) ;
 
 #ifdef OPENMVG_USE_OPENMP
-#pragma omp parallel for schedule(dynamic)
+  #pragma omp parallel for schedule(dynamic)
 #endif
-  for( int i = 1 ; i < static_cast<int>(range.size()) ; ++i ) {
-    ImageFEDCentral( src, diff, half_t, out, range[i-1] , range[i]) ;
+  for( int i = 1 ; i < static_cast<int>( range.size() ) ; ++i )
+  {
+    ImageFEDCentral( src, diff, half_t, out, range[i - 1] , range[i] ) ;
   }
 }
 
@@ -119,7 +128,7 @@ void ImageFEDCentralCPPThread( const Image & src , const Image & diff , const ty
 template< typename Image >
 void ImageFED( const Image & src , const Image & diff , const typename Image::Tpixel t , Image & out )
 {
-  typedef typename Image::Tpixel Real ;
+  using Real = typename Image::Tpixel;
   const int width = src.Width() ;
   const int height = src.Height() ;
   const Real half_t = t * static_cast<Real>( 0.5 ) ;
@@ -235,8 +244,14 @@ void ImageFEDCycle( Image & self , const Image & diff , const std::vector< typen
   }
 }
 
-// Compute if a number is prime of not
-static bool IsPrime( const int i )
+/**
+* Compute if a number is prime of not
+* @param i Input number to test
+* @retval true if number is prime
+* @retval false if number is not prime
+* @todo Move this function elsewhere since it's not an image related function
+*/
+inline bool IsPrime( const int i )
 {
   if( i == 1 )
   {
@@ -263,7 +278,12 @@ static bool IsPrime( const int i )
   return true;
 }
 
-static inline int NextPrimeGreaterOrEqualTo( const int i )
+/**
+* @brief Get the next prime number greater or equal to input
+* @param i Input number
+* @return next prime greater or equal to input
+*/
+inline int NextPrimeGreaterOrEqualTo( const int i )
 {
   if( IsPrime( i ) )
   {
@@ -336,4 +356,4 @@ int FEDCycleTimings( const Real T , const Real Tmax , std::vector< Real > & tau 
 }  // namespace image
 }  // namespace openMVG
 
-#endif //  OPENMVG_IMAGE_IMAGE_DIFFUSION_HPP_
+#endif //  OPENMVG_IMAGE_IMAGE_DIFFUSION_HPP

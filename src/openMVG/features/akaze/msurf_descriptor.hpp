@@ -4,8 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_IMAGE_DESCRIPTION_MSURF_DESCRIPTOR_H
-#define OPENMVG_IMAGE_DESCRIPTION_MSURF_DESCRIPTOR_H
+#ifndef OPENMVG_IMAGE_DESCRIPTION_MSURF_DESCRIPTOR_HPP
+#define OPENMVG_IMAGE_DESCRIPTION_MSURF_DESCRIPTOR_HPP
 
 #include "openMVG/features/descriptor.hpp"
 #include "openMVG/features/feature.hpp"
@@ -55,7 +55,6 @@ namespace features {
     Real cx = - static_cast<Real>( 0.5 ) , cy = static_cast<Real>( 0.5 ) ;
 
     // Set the descriptor size and the sample and pattern sizes
-    const int dsize = 64;
     const int sample_step = 5;
     const int pattern_size = 12;
 
@@ -134,10 +133,7 @@ namespace features {
     }
 
     // convert to unit vector (L2 norm)
-    typedef Eigen::Matrix<Real, Eigen::Dynamic, 1> VecReal;
-    Eigen::Map< VecReal > dataMap( &desc[0], 64);
-    dataMap.normalize();
-    //std::cout << dataMap.transpose() << std::endl << std::endl;
+    desc.normalize();
   }
 
   template<typename ImageT>
@@ -160,4 +156,4 @@ namespace features {
 } // namespace features
 } // namespace openMVG
 
-#endif
+#endif // OPENMVG_IMAGE_DESCRIPTION_MSURF_DESCRIPTOR_HPP

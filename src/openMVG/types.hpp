@@ -4,8 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_TYPES_H_
-#define OPENMVG_TYPES_H_
+#ifndef OPENMVG_TYPES_HPP
+#define OPENMVG_TYPES_HPP
 
 #include <Eigen/Core>
 
@@ -15,32 +15,78 @@
 #include <set>
 #include <vector>
 
-#if defined OPENMVG_STD_UNORDERED_MAP
+#ifdef __clang__
+
+#include "openMVG/stl/hash.hpp"
+
 #include <unordered_map>
-#endif
+#include <utility>
 
-namespace openMVG{
+#define OPENMVG_STD_UNORDERED_MAP 1
 
-typedef uint32_t IndexT;
+namespace std {
+  template<typename T1, typename T2>
+  struct hash<std::pair<T1, T2>> {
+    std::size_t operator()(std::pair<T1, T2> const &p) const {
+      std::size_t seed1(0);
+      stl::hash_combine(seed1, p.first);
+      stl::hash_combine(seed1, p.second);
+
+      std::size_t seed2(0);
+      stl::hash_combine(seed2, p.second);
+      stl::hash_combine(seed2, p.first);
+
+      return std::min(seed1, seed2);
+    }
+  };
+}
+
+#endif // __clang__
+
+/**
+* @brief Main namespace of openMVG API
+*/
+namespace openMVG
+{
+
+/// Portable type used to store an index
+using IndexT = uint32_t;
+
+/// Portable value used to save an undefined index value
 static const IndexT UndefinedIndexT = std::numeric_limits<IndexT>::max();
 
-typedef std::pair<IndexT,IndexT> Pair;
-typedef std::set<Pair> Pair_Set;
-typedef std::vector<Pair> Pair_Vec;
+/// Standard Pair of IndexT
+using Pair = std::pair<IndexT, IndexT>;
 
-#define OPENMVG_NO_UNORDERED_MAP 1
+/// Set of Pair
+using Pair_Set = std::set<Pair>;
 
-#if defined OPENMVG_NO_UNORDERED_MAP
-template<typename K, typename V>
-struct Hash_Map : std::map<K, V, std::less<K>,
- Eigen::aligned_allocator<std::pair<K,V> > > {};
-#endif
+/// Vector of Pair
+using Pair_Vec = std::vector<Pair>;
 
 #if defined OPENMVG_STD_UNORDERED_MAP
+
+/**
+* @brief Standard Hash_Map class
+* @tparam K type of the keys
+* @tparam V type of the values
+*/
 template<typename Key, typename Value>
-struct Hash_Map : std::unordered_map<Key, Value> {};
-#endif
+using Hash_Map = std::unordered_map<Key, Value>;
+
+#else
+
+/**
+* @brief Standard Hash_Map class
+* @tparam K type of the keys
+* @tparam V type of the values
+*/
+template<typename K, typename V>
+using Hash_Map = std::map<K, V, std::less<K>,
+  Eigen::aligned_allocator<std::pair<const K, V> > >;
+
+#endif // OPENMVG_STD_UNORDERED_MAP
 
 } // namespace openMVG
 
-#endif  // OPENMVG_TYPES_H_
+#endif  // OPENMVG_TYPES_HPP

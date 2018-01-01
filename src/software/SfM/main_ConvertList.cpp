@@ -52,6 +52,7 @@ int main(int argc, char **argv)
       << "\t 2: Pinhole radial 1\n"
       << "\t 3: Pinhole radial 3\n"
       << "\t 4: Pinhole brown with radial 3 and tangential 2\n"
+      << "\t 5: Pinhole with a simple Fish-eye distortion\n"
       << "[-g|--group_camera_model]\n"
       << "\t 0-> each view have it's own camera intrinsic parameters,\n"
       << "\t 1-> views can share some camera intrinsic parameters (default)\n"
@@ -67,9 +68,6 @@ int main(int argc, char **argv)
             << "--outputDirectory " << sOutputDir << std::endl
             << "--camera_model " << i_User_camera_model << std::endl
             << "--group_camera_model " << b_Group_camera_model << std::endl;
-
-  // Expected properties for each image
-  double width = -1, height = -1, focal = -1, ppx = -1,  ppy = -1;
 
   const EINTRINSIC e_User_camera_model = EINTRINSIC(i_User_camera_model);
 
@@ -126,10 +124,11 @@ int main(int argc, char **argv)
     iter != vec_camImageNames.end(); ++iter)
   {
     const openMVG::SfMIO::CameraInfo & camInfo = *iter;
-    // Find the index of the correponding cameraInfo
+    // Find the index of the corresponding cameraInfo
     const size_t idx = std::distance((std::vector<openMVG::SfMIO::CameraInfo>::const_iterator)vec_camImageNames.begin(), iter);
 
-    double width = height = ppx = ppy = focal = -1.0;
+    // Expected properties for each image
+    double width = -1, height = -1, focal = -1, ppx = -1,  ppy = -1;
 
     std::shared_ptr<IntrinsicBase> intrinsic (NULL);
 
@@ -155,6 +154,9 @@ int main(int argc, char **argv)
         break;
         case PINHOLE_CAMERA_BROWN:
           intrinsic = std::make_shared<Pinhole_Intrinsic_Brown_T2>(width, height, focal, ppx, ppy);
+        break;
+        case PINHOLE_CAMERA_FISHEYE:
+        intrinsic = std::make_shared<Pinhole_Intrinsic_Fisheye>(width, height, focal, ppx, ppy);
         break;
         default:
           std::cerr << "Invalid camera model." << std::endl;

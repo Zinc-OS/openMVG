@@ -5,28 +5,31 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_SFM_DATA_IO_PLY_HPP
-#define OPENMVG_SFM_DATA_IO_PLY_HPP
+#ifndef OPENMVG_SFM_SFM_DATA_IO_PLY_HPP
+#define OPENMVG_SFM_SFM_DATA_IO_PLY_HPP
 
 #include "openMVG/sfm/sfm_data_io.hpp"
+
 #include <fstream>
+#include <iomanip>
 
 namespace openMVG {
 namespace sfm {
 
 /// Save the structure and camera positions of a SfM_Data container as 3D points in a PLY ASCII file.
-static bool Save_PLY(
+inline bool Save_PLY(
   const SfM_Data & sfm_data,
   const std::string & filename,
   ESfM_Data flags_part)
 {
   const bool b_structure = (flags_part & STRUCTURE) == STRUCTURE;
+  const bool b_control_points = (flags_part & CONTROL_POINTS) == CONTROL_POINTS;
   const bool b_extrinsics = (flags_part & EXTRINSICS) == EXTRINSICS;
 
-  if (!(b_structure || b_extrinsics))
-    return false;
+  if (!(b_structure || b_extrinsics || b_control_points))
+    return false; // No 3D points to display, so it would produce an empty PLY file
 
-  //Create the stream and check it is ok
+  // Create the stream and check its status
   std::ofstream stream(filename.c_str());
   if (!stream.is_open())
     return false;
@@ -35,22 +38,36 @@ static bool Save_PLY(
   {
     // Count how many views having valid poses:
     IndexT view_with_pose_count = 0;
+    IndexT view_with_pose_prior_count = 0;
     if (b_extrinsics)
     {
       for (const auto & view : sfm_data.GetViews())
       {
         view_with_pose_count += sfm_data.IsPoseAndIntrinsicDefined(view.second.get());
       }
+
+      for (const auto & view : sfm_data.GetViews())
+      {
+        if (const sfm::ViewPriors *prior = dynamic_cast<sfm::ViewPriors*>(view.second.get()))
+        {
+            view_with_pose_prior_count += prior->b_use_pose_center_;
+        }
+      }
     }
+
+    stream << std::fixed << std::setprecision (std::numeric_limits<double>::digits10 + 1);
+
     stream << "ply"
       << '\n' << "format ascii 1.0"
       << '\n' << "element vertex "
-        // Vertex count: (#landmark + #view_with_valid_pose)
-        << ((b_structure ? sfm_data.GetLandmarks().size() : 0) +
-            view_with_pose_count)
-      << '\n' << "property float x"
-      << '\n' << "property float y"
-      << '\n' << "property float z"
+        // Vertex count: (#landmark + #GCP + #view_with_valid_pose)
+        << (  (b_structure ? sfm_data.GetLandmarks().size() : 0)
+            + (b_control_points ? sfm_data.GetControl_Points().size() : 0)
+            + view_with_pose_count
+            + view_with_pose_prior_count)
+      << '\n' << "property double x"
+      << '\n' << "property double y"
+      << '\n' << "property double z"
       << '\n' << "property uchar red"
       << '\n' << "property uchar green"
       << '\n' << "property uchar blue"
@@ -60,24 +77,59 @@ static bool Save_PLY(
       {
         for (const auto & view : sfm_data.GetViews())
         {
+          // Export pose as Green points
           if (sfm_data.IsPoseAndIntrinsicDefined(view.second.get()))
           {
             const geometry::Pose3 pose = sfm_data.GetPoseOrDie(view.second.get());
-            stream << pose.center().transpose()
-              << " 0 255 0" << "\n";
+            stream
+              << pose.center()(0) << ' '
+              << pose.center()(1) << ' '
+              << pose.center()(2) << ' '
+              << "0 255 0\n";
+          }
+
+          // Export pose priors as Blue points
+          if (const sfm::ViewPriors *prior = dynamic_cast<sfm::ViewPriors*>(view.second.get()))
+          {
+            if (prior->b_use_pose_center_) {
+              stream
+                << prior->pose_center_(0) << ' '
+                << prior->pose_center_(1) << ' '
+                << prior->pose_center_(2) << ' '
+                << "0 0 255\n";
+            }
           }
         }
       }
 
       if (b_structure)
       {
+        // Export structure points as White points
         const Landmarks & landmarks = sfm_data.GetLandmarks();
-        for (Landmarks::const_iterator iterLandmarks = landmarks.begin();
-          iterLandmarks != landmarks.end();
-          ++iterLandmarks)  {
-          stream << iterLandmarks->second.X.transpose() << " 255 255 255" << "\n";
+        for ( const auto & iterLandmarks : landmarks )
+        {
+          stream
+            << iterLandmarks.second.X(0) << ' '
+            << iterLandmarks.second.X(1) << ' '
+            << iterLandmarks.second.X(2) << ' '
+            << "255 255 255\n";
         }
       }
+
+      if (b_control_points)
+      {
+        // Export GCP as Red points
+        const Landmarks & landmarks = sfm_data.GetControl_Points();
+        for ( const auto & iterGCP : landmarks )
+        {
+          stream
+            << iterGCP.second.X(0) << ' '
+            << iterGCP.second.X(1) << ' '
+            << iterGCP.second.X(2) << ' '
+            << "255 0 0\n";
+        }
+      }
+
       stream.flush();
       bOk = stream.good();
       stream.close();
@@ -88,4 +140,4 @@ static bool Save_PLY(
 } // namespace sfm
 } // namespace openMVG
 
-#endif // OPENMVG_SFM_DATA_IO_PLY_HPP
+#endif // OPENMVG_SFM_SFM_DATA_IO_PLY_HPP

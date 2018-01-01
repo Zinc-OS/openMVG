@@ -9,6 +9,7 @@
 
 #include "openMVG/sfm/sfm.hpp"
 #include "openMVG/system/timer.hpp"
+#include "openMVG/cameras/Cameras_Common_command_line_helper.hpp"
 
 #include "third_party/cmdLine/cmdLine.h"
 #include "third_party/stlplus3/filesystemSimplified/file_system.hpp"
@@ -32,7 +33,6 @@ bool computeIndexFromImageNames(
   initialPairIndex = Pair(UndefinedIndexT, UndefinedIndexT);
 
   /// List views filenames and find the one that correspond to the user ones:
-  std::vector<std::string> vec_camImageName;
   for (Views::const_iterator it = sfm_data.GetViews().begin();
     it != sfm_data.GetViews().end(); ++it)
   {
@@ -67,8 +67,9 @@ int main(int argc, char **argv)
   std::string sMatchesDir;
   std::string sOutDir = "";
   std::pair<std::string,std::string> initialPairString("","");
-  bool bRefineIntrinsics = true;
+  std::string sIntrinsic_refinement_options = "ADJUST_ALL";
   int i_User_camera_model = PINHOLE_CAMERA_RADIAL3;
+  bool b_use_motion_priors = false;
 
   cmd.add( make_option('i', sSfM_Data_Filename, "input_file") );
   cmd.add( make_option('m', sMatchesDir, "matchdir") );
@@ -76,7 +77,8 @@ int main(int argc, char **argv)
   cmd.add( make_option('a', initialPairString.first, "initialPairA") );
   cmd.add( make_option('b', initialPairString.second, "initialPairB") );
   cmd.add( make_option('c', i_User_camera_model, "camera_model") );
-  cmd.add( make_option('f', bRefineIntrinsics, "refineIntrinsics") );
+  cmd.add( make_option('f', sIntrinsic_refinement_options, "refineIntrinsics") );
+  cmd.add( make_switch('P', "prior_usage") );
 
   try {
     if (argc == 1) throw std::string("Invalid parameter.");
@@ -86,20 +88,43 @@ int main(int argc, char **argv)
     << "[-i|--input_file] path to a SfM_Data scene\n"
     << "[-m|--matchdir] path to the matches that corresponds to the provided SfM_Data scene\n"
     << "[-o|--outdir] path where the output data will be stored\n"
+    << "\n[Optional]\n"
     << "[-a|--initialPairA] filename of the first image (without path)\n"
     << "[-b|--initialPairB] filename of the second image (without path)\n"
     << "[-c|--camera_model] Camera model type for view with unknown intrinsic:\n"
       << "\t 1: Pinhole \n"
       << "\t 2: Pinhole radial 1\n"
       << "\t 3: Pinhole radial 3 (default)\n"
-    << "[-f|--refineIntrinsics] \n"
-    << "\t 0-> intrinsic parameters are kept as constant\n"
-    << "\t 1-> refine intrinsic parameters (default). \n"
+      << "\t 4: Pinhole radial 3 + tangential 2\n"
+      << "\t 5: Pinhole fisheye\n"
+    << "[-f|--refineIntrinsics] Intrinsic parameters refinement option\n"
+      << "\t ADJUST_ALL -> refine all existing parameters (default) \n"
+      << "\t NONE -> intrinsic parameters are held as constant\n"
+      << "\t ADJUST_FOCAL_LENGTH -> refine only the focal length\n"
+      << "\t ADJUST_PRINCIPAL_POINT -> refine only the principal point position\n"
+      << "\t ADJUST_DISTORTION -> refine only the distortion coefficient(s) (if any)\n"
+      << "\t -> NOTE: options can be combined thanks to '|'\n"
+      << "\t ADJUST_FOCAL_LENGTH|ADJUST_PRINCIPAL_POINT\n"
+      <<      "\t\t-> refine the focal length & the principal point position\n"
+      << "\t ADJUST_FOCAL_LENGTH|ADJUST_DISTORTION\n"
+      <<      "\t\t-> refine the focal length & the distortion coefficient(s) (if any)\n"
+      << "\t ADJUST_PRINCIPAL_POINT|ADJUST_DISTORTION\n"
+      <<      "\t\t-> refine the principal point position & the distortion coefficient(s) (if any)\n"
+      << "[-P|--prior_usage] Enable usage of motion priors (i.e GPS positions) (default: false)\n"
     << std::endl;
 
     std::cerr << s << std::endl;
     return EXIT_FAILURE;
   }
+
+  if (i_User_camera_model < PINHOLE_CAMERA ||
+      i_User_camera_model > PINHOLE_CAMERA_FISHEYE )  {
+    std::cerr << "\n Invalid camera type" << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  const cameras::Intrinsic_Parameter_Type intrinsic_refinement_options =
+    cameras::StringTo_Intrinsic_Parameter_Type(sIntrinsic_refinement_options);
 
   // Load input SfM_Data scene
   SfM_Data sfm_data;
@@ -129,7 +154,12 @@ int main(int argc, char **argv)
   }
   // Matches reading
   std::shared_ptr<Matches_Provider> matches_provider = std::make_shared<Matches_Provider>();
-  if (!matches_provider->load(sfm_data, stlplus::create_filespec(sMatchesDir, "matches.f.txt"))) {
+  if // Try to read the two matches file formats
+  (
+    !(matches_provider->load(sfm_data, stlplus::create_filespec(sMatchesDir, "matches.f.txt")) ||
+      matches_provider->load(sfm_data, stlplus::create_filespec(sMatchesDir, "matches.f.bin")))
+  )
+  {
     std::cerr << std::endl
       << "Invalid matches file." << std::endl;
     return EXIT_FAILURE;
@@ -141,7 +171,12 @@ int main(int argc, char **argv)
   }
 
   if (!stlplus::folder_exists(sOutDir))
-    stlplus::folder_create(sOutDir);
+  {
+    if (!stlplus::folder_create(sOutDir))
+    {
+      std::cerr << "\nCannot create the output directory" << std::endl;
+    }
+  }
 
   //---------------------------------------
   // Sequential reconstruction process
@@ -158,8 +193,10 @@ int main(int argc, char **argv)
   sfmEngine.SetMatchesProvider(matches_provider.get());
 
   // Configure reconstruction parameters
-  sfmEngine.Set_bFixedIntrinsics(!bRefineIntrinsics);
+  sfmEngine.Set_Intrinsics_Refinement_Type(intrinsic_refinement_options);
   sfmEngine.SetUnknownCameraType(EINTRINSIC(i_User_camera_model));
+  b_use_motion_priors = cmd.used('P');
+  sfmEngine.Set_Use_Motion_Prior(b_use_motion_priors);
 
   // Handle Initial pair parameter
   if (!initialPairString.first.empty() && !initialPairString.second.empty())
@@ -167,7 +204,7 @@ int main(int argc, char **argv)
     Pair initialPairIndex;
     if(!computeIndexFromImageNames(sfm_data, initialPairString, initialPairIndex))
     {
-        std::cerr << "Could not find the initial pairs <" << initialPairString.first 
+        std::cerr << "Could not find the initial pairs <" << initialPairString.first
           <<  ", " << initialPairString.second << ">!\n";
       return EXIT_FAILURE;
     }
@@ -185,7 +222,7 @@ int main(int argc, char **argv)
     //-- Export to disk computed scene (data & visualizable results)
     std::cout << "...Export SfM_Data to disk." << std::endl;
     Save(sfmEngine.Get_SfM_Data(),
-      stlplus::create_filespec(sOutDir, "sfm_data", ".json"),
+      stlplus::create_filespec(sOutDir, "sfm_data", ".bin"),
       ESfM_Data(ALL));
 
     Save(sfmEngine.Get_SfM_Data(),

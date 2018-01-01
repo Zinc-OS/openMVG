@@ -18,6 +18,10 @@
 #include "openMVG/sfm/sfm_data_triangulation.hpp"
 #include "openMVG/geometry/rigid_transformation3D_srt.hpp"
 #include "openMVG/geometry/Similarity3.hpp"
+#include "openMVG/sfm/sfm_data_BA_ceres.hpp"
+#include "openMVG/sfm/sfm_data_transform.hpp"
+
+#include "openMVG/stl/stl.hpp"
 
 void MainWindow::removeAllControlPoints()
 {
@@ -31,7 +35,7 @@ void MainWindow::help()
    tr(
    "This application allow to perform a rigid registration of a SfM scene to know GCP (Ground Control Points)<br>"
    "<b>Important:</b><br>"
-   "Each GCP must have an unique numbered ID.<br>"
+   "Each GCP must have a unique numbered ID.<br>"
    "<b>1-</b> Add GCP image observations:<br>"
    " - double-click on one image on the left (in which you want add a GCP observation)<br>"
    " - click on the displayed image on the right, and choose your ID and move your GCP observation to the right place.<br>"
@@ -116,10 +120,17 @@ void MainWindow::openProject()
       model->setHeaderData(0, Qt::Horizontal, QObject::tr("Views"));
       m_treeView_Images->setModel(model);
 
-      for (Views::const_reverse_iterator iterV = m_doc._sfm_data.GetViews().rbegin();
-        iterV != m_doc._sfm_data.GetViews().rend();
-        ++iterV)
+      std::vector<IndexT> view_ids;
+      view_ids.reserve(m_doc._sfm_data.GetViews().size());
+      std::transform(m_doc._sfm_data.GetViews().begin(), m_doc._sfm_data.GetViews().end(),
+        std::back_inserter(view_ids), stl::RetrieveKey());
+      std::sort(view_ids.begin(), view_ids.end());
+
+      // Add view in reverse order to have them ordered by ID
+      for (std::vector<IndexT>::const_reverse_iterator iter = view_ids.rbegin();
+        iter != view_ids.rend(); ++iter)
       {
+        Views::const_iterator iterV = m_doc._sfm_data.GetViews().find(*iter);
         const View * view = iterV->second.get();
         if (m_doc._sfm_data.IsPoseAndIntrinsicDefined(view))
         {
@@ -255,7 +266,7 @@ void MainWindow::registerProject()
     // data conversion to appropriate container
     Mat x1(3, vec_control_points.size()),
         x2(3, vec_control_points.size());
-    for (int i=0; i < vec_control_points.size(); ++i)
+    for (size_t i=0; i < vec_control_points.size(); ++i)
     {
       x1.col(i) = vec_triangulated[i];
       x2.col(i) = vec_control_points[i];
@@ -278,27 +289,13 @@ void MainWindow::registerProject()
         << " rotation:\n" << R << "\n"
         << " translation: "<< t.transpose() << std::endl;
 
-      // Encode the transformation as a 3D Similarity transformation matrix // S * R * X + t
+
+      //--
+      // Apply the found transformation as a 3D Similarity transformation matrix // S * R * X + t
+      //--
+
       const openMVG::geometry::Similarity3 sim(geometry::Pose3(R, -R.transpose() * t/S), S);
-
-      //--
-      // Apply the found transformation
-      //--
-
-      // Transform the landmark positions
-      for (Landmarks::iterator iterL = m_doc._sfm_data.structure.begin();
-        iterL != m_doc._sfm_data.structure.end(); ++iterL)
-      {
-        iterL->second.X = sim(iterL->second.X);
-      }
-
-      // Transform the camera positions
-      for (Poses::iterator iterP = m_doc._sfm_data.poses.begin();
-        iterP != m_doc._sfm_data.poses.end(); ++iterP)
-      {
-        geometry::Pose3 & pose = iterP->second;
-        pose = sim(pose);
-      }
+      openMVG::sfm::ApplySimilarity(sim, m_doc._sfm_data);
 
       // Display some statistics:
       std::stringstream os;
@@ -326,6 +323,31 @@ void MainWindow::registerProject()
     {
       QMessageBox msgBox;
       msgBox.setText("Registration failed. Please check your Control Points coordinates.");
+      msgBox.exec();
+    }
+  }
+
+  //---
+  // Bundle adjustment with GCP
+  //---
+  {
+    using namespace openMVG::sfm;
+    Bundle_Adjustment_Ceres::BA_Ceres_options options;
+    Bundle_Adjustment_Ceres bundle_adjustment_obj(options);
+    Control_Point_Parameter control_point_opt(20.0, true);
+    if (!bundle_adjustment_obj.Adjust(m_doc._sfm_data,
+        Optimize_Options
+        (
+          cameras::Intrinsic_Parameter_Type::NONE, // Keep intrinsic constant
+          Extrinsic_Parameter_Type::ADJUST_ALL, // Adjust camera motion
+          Structure_Parameter_Type::ADJUST_ALL, // Adjust structure
+          control_point_opt // Use GCP and weight more their observation residuals
+          )
+        )
+      )
+    {
+      QMessageBox msgBox;
+      msgBox.setText("BA with GCP failed.");
       msgBox.exec();
     }
   }
@@ -381,10 +403,8 @@ void MainWindow::createMenus()
   m_menuFile = new QMenu(tr("&File"),this);
   m_menuFile->setObjectName(QString::fromUtf8("m_menuFile"));
   menuBar()->addMenu(m_menuFile);
-  QMenu * fileMenu = new QMenu(tr("Open Project"), this);
   m_menuFile->addAction(m_open_action);
 
-  QMenu * m_menuSave = new QMenu(tr("&Save Project"),this);
   m_menuFile->setObjectName(QString::fromUtf8("m_menuSave"));
   m_menuFile->addAction(m_save_action);
 
@@ -403,7 +423,6 @@ void MainWindow::createMenus()
   m_menuHelp = new QMenu(tr("&Help"),this);
   m_menuHelp->setObjectName(QString::fromUtf8("m_menuHelp"));
   menuBar()->addMenu(m_menuHelp);
-  QMenu * helpMenu = new QMenu(tr("Help"), this);
   m_menuHelp->addAction(m_help_action);
 }
 

@@ -5,8 +5,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef OPENMVG_STL_INDEXED_SORT_H
-#define OPENMVG_STL_INDEXED_SORT_H
+#ifndef OPENMVG_STL_INDEXED_SORT_HPP
+#define OPENMVG_STL_INDEXED_SORT_HPP
+
+#include <vector>
 
 namespace stl
 {
@@ -42,9 +44,7 @@ namespace indexed_sort
 
   /// Sort by default all indexed value, else sort only the NN smallest element of the indexed array.
   template<typename packet_type, typename eT>
-  void
-    inline
-    sort_index_helper(std::vector<packet_type>& packet_vec,
+  inline void sort_index_helper(std::vector<packet_type>& packet_vec,
                       const eT* in_mem, int NN = -1)  {
     const size_t n_elem = packet_vec.size();
 
@@ -63,4 +63,4 @@ namespace indexed_sort
 } // namespace indexed_sort
 } // namespace stl
 
-#endif  // OPENMVG_STL_INDEXED_SORT_H
+#endif  // OPENMVG_STL_INDEXED_SORT_HPP

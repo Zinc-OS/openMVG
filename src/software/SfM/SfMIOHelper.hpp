@@ -40,7 +40,7 @@ struct IntrinsicCameraInfo
   bool m_bKnownIntrinsic; // true if 11 or 6, else false
   std::string m_sCameraMaker, m_sCameraModel;
 
-  IntrinsicCameraInfo(): m_w(0), m_h(0), m_K(Mat3::Zero()), m_k1(0), m_k2(0), m_k3(0), m_bKnownIntrinsic(false), m_sCameraModel(""), m_sCameraMaker("")
+  IntrinsicCameraInfo(): m_w(0), m_h(0), m_K(Mat3::Zero()), m_k1(0), m_k2(0), m_k3(0), m_bKnownIntrinsic(false), m_sCameraMaker(""), m_sCameraModel("")
   {  }
 
   /// Functor used to tell if two IntrinsicCameraInfo share the same optical properties
@@ -74,7 +74,7 @@ static bool loadImageList( std::vector<CameraInfo> & vec_camImageName,
   while(getline( in, sValue ) )
   {
     vec_str.clear();
-    stl::split(sValue, ";", vec_str);
+    stl::split(sValue, ';', vec_str);
     if (vec_str.size() == 1)
     {
       std::cerr << "Invalid input file" << std::endl;
@@ -176,7 +176,7 @@ static bool loadImageList( std::vector<CameraInfo> & vec_camImageName,
     {
       id = std::distance( std::vector<IntrinsicCameraInfo>::const_iterator(vec_focalGroup.begin()), iterIntrinsicGroup);
     }
-    
+
     CameraInfo camInfo;
     camInfo.m_sImageName = vec_str[0];
     camInfo.m_intrinsicId = id;
@@ -189,9 +189,12 @@ static bool loadImageList( std::vector<CameraInfo> & vec_camImageName,
 }
 
 //-- Load an image list file but only return camera image names
-static bool loadImageList( std::vector<std::string> & vec_camImageName,
-                           const std::string & sListFileName,
-                           bool bVerbose = true )
+inline bool loadImageList
+(
+  std::vector<std::string> & vec_camImageName,
+  const std::string & sListFileName,
+  bool bVerbose = true
+)
 {
   vec_camImageName.clear();
   std::vector<openMVG::SfMIO::CameraInfo> vec_camImageIntrinsicInfo;

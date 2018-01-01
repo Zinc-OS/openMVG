@@ -4,14 +4,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "openMVG/geometry/half_space_intersection.hpp"
 #include "openMVG/geometry/frustum.hpp"
-
-#include "openMVG/multiview/test_data_sets.hpp"
+#include "openMVG/geometry/half_space_intersection.hpp"
 #include "openMVG/multiview/projection.hpp"
+#include "openMVG/multiview/test_data_sets.hpp"
 
 #include "CppUnitLite/TestHarness.h"
+
 #include "testing/testing.h"
+
 #include <iostream>
 
 using namespace openMVG;
@@ -48,7 +49,11 @@ TEST(frustum, intersection)
     // Check that frustums have an overlap
     for (int i = 0; i < iNviews; ++i)
       for (int j = 0; j < iNviews; ++j)
+      {
         EXPECT_TRUE(vec_frustum[i].intersect(vec_frustum[j]));
+        // check test symmetry
+        EXPECT_TRUE(vec_frustum[j].intersect(vec_frustum[i]));
+      }
   }
 
   // Test with truncated frustum
@@ -76,7 +81,11 @@ TEST(frustum, intersection)
     // Check that frustums have an overlap
     for (int i = 0; i < iNviews; ++i)
       for (int j = 0; j < iNviews; ++j)
+      {
         EXPECT_TRUE(vec_frustum[i].intersect(vec_frustum[j]));
+        // Check test symmetry
+        EXPECT_TRUE(vec_frustum[j].intersect(vec_frustum[i]));
+      }
   }
 }
 
