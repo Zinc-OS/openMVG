@@ -7,6 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "openMVG/graph/graph.hpp"
+#include "openMVG/graph/graph_stats.hpp"
 #include "openMVG/features/akaze/image_describer_akaze.hpp"
 #include "openMVG/features/descriptor.hpp"
 #include "openMVG/features/feature.hpp"
@@ -21,6 +22,7 @@
 #include "openMVG/matching_image_collection/F_ACRobust.hpp"
 #include "openMVG/matching_image_collection/E_ACRobust.hpp"
 #include "openMVG/matching_image_collection/E_ACRobust_Angular.hpp"
+#include "openMVG/matching_image_collection/Eo_Robust.hpp"
 #include "openMVG/matching_image_collection/H_ACRobust.hpp"
 #include "openMVG/matching_image_collection/Pair_Builder.hpp"
 #include "openMVG/matching/pairwiseAdjacencyDisplay.hpp"
@@ -49,7 +51,9 @@ enum EGeometricModel
   FUNDAMENTAL_MATRIX = 0,
   ESSENTIAL_MATRIX   = 1,
   HOMOGRAPHY_MATRIX  = 2,
-  ESSENTIAL_MATRIX_ANGULAR = 3
+  ESSENTIAL_MATRIX_ANGULAR = 3,
+  ESSENTIAL_MATRIX_ORTHO = 4,
+  ESSENTIAL_MATRIX_UPRIGHT = 5
 };
 
 enum EPairMode
@@ -111,7 +115,9 @@ int main(int argc, char **argv)
       << "   f: (default) fundamental matrix,\n"
       << "   e: essential matrix,\n"
       << "   h: homography matrix.\n"
-      << "   a: essential matrix with an angular parametrization.\n"
+      << "   a: essential matrix with an angular parametrization,\n"
+      << "   o: orthographic essential matrix.\n"
+      << "   u: upright essential matrix.\n"
       << "[-v|--video_mode_matching]\n"
       << "  (sequence matching with an overlap of X images)\n"
       << "   X: with match 0 with (1->X), ...]\n"
@@ -122,6 +128,7 @@ int main(int argc, char **argv)
       << "  AUTO: auto choice from regions type,\n"
       << "  For Scalar based regions descriptor:\n"
       << "    BRUTEFORCEL2: L2 BruteForce matching,\n"
+      << "    HNSWL2: L2 Approximate Matching with Hierarchical Navigable Small World graphs,\n"
       << "    ANNL2: L2 Approximate Nearest Neighbor matching,\n"
       << "    CASCADEHASHINGL2: L2 Cascade Hashing matching.\n"
       << "    FASTCASCADEHASHINGL2: (default)\n"
@@ -130,9 +137,9 @@ int main(int argc, char **argv)
       << "  For Binary based descriptor:\n"
       << "    BRUTEFORCEHAMMING: BruteForce Hamming matching.\n"
       << "[-m|--guided_matching]\n"
-      << "  use the found model to improve the pairwise correspondences."
+      << "  use the found model to improve the pairwise correspondences.\n"
       << "[-c|--cache_size]\n"
-      << "  Use a regions cache (only cache_size regions will be stored in memory)"
+      << "  Use a regions cache (only cache_size regions will be stored in memory)\n"
       << "  If not used, all regions will be load in memory."
       << std::endl;
 
@@ -187,6 +194,14 @@ int main(int argc, char **argv)
     break;
     case 'a': case 'A':
       eGeometricModelToCompute = ESSENTIAL_MATRIX_ANGULAR;
+      sGeometricMatchesFilename = "matches.f.bin";
+    break;
+    case 'o': case 'O':
+      eGeometricModelToCompute = ESSENTIAL_MATRIX_ORTHO;
+      sGeometricMatchesFilename = "matches.o.bin";
+    break;
+    case 'u': case 'U':
+      eGeometricModelToCompute = ESSENTIAL_MATRIX_UPRIGHT;
       sGeometricMatchesFilename = "matches.f.bin";
     break;
     default:
@@ -327,6 +342,12 @@ int main(int argc, char **argv)
       collectionMatcher.reset(new Matcher_Regions(fDistRatio, BRUTE_FORCE_HAMMING));
     }
     else
+    if (sNearestMatchingMethod == "HNSWL2")
+    {
+      std::cout << "Using HNSWL2 matcher" << std::endl;
+      collectionMatcher.reset(new Matcher_Regions(fDistRatio, HNSW_L2));
+    }
+    else
     if (sNearestMatchingMethod == "ANNL2")
     {
       std::cout << "Using ANN_L2 matcher" << std::endl;
@@ -366,7 +387,7 @@ int main(int argc, char **argv)
           break;
       }
       // Photometric matching of putative pairs
-      collectionMatcher->Match(sfm_data, regions_provider, pairs, map_PutativesMatches, &progress);
+      collectionMatcher->Match(regions_provider, pairs, map_PutativesMatches, &progress);
       //---------------------------------------
       //-- Export putative matches
       //---------------------------------------
@@ -415,7 +436,8 @@ int main(int argc, char **argv)
       case HOMOGRAPHY_MATRIX:
       {
         const bool bGeometric_only_guided_matching = true;
-        filter_ptr->Robust_model_estimation(GeometricFilter_HMatrix_AC(4.0, imax_iteration),
+        filter_ptr->Robust_model_estimation(
+          GeometricFilter_HMatrix_AC(4.0, imax_iteration),
           map_PutativesMatches, bGuided_matching,
           bGeometric_only_guided_matching ? -1.0 : d_distance_ratio, &progress);
         map_GeometricMatches = filter_ptr->Get_geometric_matches();
@@ -423,14 +445,16 @@ int main(int argc, char **argv)
       break;
       case FUNDAMENTAL_MATRIX:
       {
-        filter_ptr->Robust_model_estimation(GeometricFilter_FMatrix_AC(4.0, imax_iteration),
+        filter_ptr->Robust_model_estimation(
+          GeometricFilter_FMatrix_AC(4.0, imax_iteration),
           map_PutativesMatches, bGuided_matching, d_distance_ratio, &progress);
         map_GeometricMatches = filter_ptr->Get_geometric_matches();
       }
       break;
       case ESSENTIAL_MATRIX:
       {
-        filter_ptr->Robust_model_estimation(GeometricFilter_EMatrix_AC(4.0, imax_iteration),
+        filter_ptr->Robust_model_estimation(
+          GeometricFilter_EMatrix_AC(4.0, imax_iteration),
           map_PutativesMatches, bGuided_matching, d_distance_ratio, &progress);
         map_GeometricMatches = filter_ptr->Get_geometric_matches();
 
@@ -455,8 +479,25 @@ int main(int argc, char **argv)
       break;
       case ESSENTIAL_MATRIX_ANGULAR:
       {
-        filter_ptr->Robust_model_estimation(GeometricFilter_ESphericalMatrix_AC_Angular(4.0, imax_iteration),
-          map_PutativesMatches, bGuided_matching);
+        filter_ptr->Robust_model_estimation(
+          GeometricFilter_ESphericalMatrix_AC_Angular<false>(4.0, imax_iteration),
+          map_PutativesMatches, bGuided_matching, d_distance_ratio, &progress);
+        map_GeometricMatches = filter_ptr->Get_geometric_matches();
+      }
+      break;
+      case ESSENTIAL_MATRIX_ORTHO:
+      {
+        filter_ptr->Robust_model_estimation(
+          GeometricFilter_EOMatrix_RA(2.0, imax_iteration),
+          map_PutativesMatches, bGuided_matching, d_distance_ratio, &progress);
+        map_GeometricMatches = filter_ptr->Get_geometric_matches();
+      }
+      break;
+      case ESSENTIAL_MATRIX_UPRIGHT:
+      {
+        filter_ptr->Robust_model_estimation(
+          GeometricFilter_ESphericalMatrix_AC_Angular<true>(4.0, imax_iteration),
+            map_PutativesMatches, bGuided_matching, d_distance_ratio, &progress);
         map_GeometricMatches = filter_ptr->Get_geometric_matches();
       }
       break;
@@ -475,6 +516,9 @@ int main(int argc, char **argv)
     }
 
     std::cout << "Task done in (s): " << timer.elapsed() << std::endl;
+
+    // -- export Geometric View Graph statistics
+    graph::getGraphStatistics(sfm_data.GetViews().size(), getPairs(map_GeometricMatches));
 
     //-- export Adjacency matrix
     std::cout << "\n Export Adjacency Matrix of the pairwise's geometric matches"
